@@ -1,4 +1,8 @@
 # Complete guide of using NetworkAnalyzerBone
+> This work is a part of my Masters degree thesis paper. [Click here to read the corresponding paper.](https://www.ideals.illinois.edu/bitstream/handle/2142/97312/YOO-THESIS-2017.pdf?sequence=1&isAllowed=y)
+
+> Schematic diagram for the custom AD5933 PCB board will be shared later on.
+
 ## Setting up BeagleBone
 ##### What you need
 * BeagleBone Rev.B
