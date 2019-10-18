@@ -1,0 +1,168 @@
+\documentclass{article}
+\usepackage{fullpage}
+\usepackage{palatino}
+\usepackage{float}
+
+
+\title{Impedance analyzer-based cell counter}
+\author{Kaustubh D. Bhalerao \and Hoi Chun Ho}
+\begin{document}
+\maketitle
+
+\section{Initialization, data input and preliminary processing}
+
+<<init, echo=FALSE, message=FALSE>>=
+library(jsonlite)
+library(plyr)
+library(ggplot2)
+library(reshape)
+library(MASS)
+
+opts_chunk$set(echo=FALSE, message=FALSE, fig.width=4, fig.height=3, fig.align='center')
+
+spec_data <- read.csv('ec_growth_spec.csv', colClasses = c('factor', 'numeric', 'numeric', 'numeric'))
+z_files <- dir('data/', pattern = '.json')
+zdata <- lapply(z_files, function(f) fromJSON(paste0('data/', f)))
+zdata <- lapply(zdata, function(f) {
+  tmp <- unlist(strsplit(f$Name, '_'))
+  f$Time <- as.POSIXct(as.POSIXct(sub("T", " ", tmp[3]), tz="UTC"), tz="CDT")
+  f$Well <- tmp[2]
+  f
+})
+
+growth <- Filter(function(f) {substr(f$Well, 1,6) == 'devrep'}, zdata)
+
+## Correct for phase angle jitter
+phase_correct <- Vectorize(function(phase) {
+  if(phase > pi) phase <- 2*pi - phase
+  if(phase < -pi) phase <- 2*pi + phase
+  phase
+})
+
+
+growth <- lapply(growth, function(f) {
+  f$Well <- toupper(substr(f$Well, 7, nchar(f$Well)))
+  f$chartdata$f <- as.numeric(f$chartdata$f)
+  f$chartdata$z <- as.numeric(f$chartdata$z)
+  f$chartdata$phi <- as.numeric(f$chartdata$phi)
+  
+  ## remove the glitch at 4000 Hz
+  lower <- subset(f$chartdata, f < 4000)
+  upper <- subset(f$chartdata, f >= 4000)
+  upper$z <- upper$z + (min(lower$z) - max(upper$z))
+  f$chartdata <- rbind(lower, upper)
+  
+  ## correct phase angle jitter
+  f$chartdata$phi <- phase_correct(f$chartdata$phi)
+  
+  f
+})
+
+growth <- lapply(growth, function(f) {
+  f$Coefficients <- with(f$chartdata, coef(lm(log(as.numeric(z)) ~ log(as.numeric(f)), weight = log(f))))
+  f
+})
+
+growth_meta <- ldply(growth, function(f) {
+  c(f$Well, f$Coefficients[1], f$Coefficients[2])
+})
+names(growth_meta) <- c('Well', 'Intercept', 'Slope')
+
+@
+
+<<fit_rcl>>=
+rcmodel <- function(r,A,eta,f) {
+  warburgish <- A / (2*pi*f)^eta * (1 - 1i)
+  Mod(r + warburgish)
+}
+
+growth <- lapply(growth, function(f) {
+  f$NLSCoefficients <- with(f$chartdata, 
+                         coef(nls(z~rcmodel(r,A,eta,f), weight = log(f),
+                                  start=list(r=min(z), A=max(z), eta=0.5))))
+  f
+})
+
+growth_meta$Intercept <- as.numeric(growth_meta$Intercept)
+growth_meta$Slope <- as.numeric(growth_meta$Slope)
+growth_meta$Resistance <- as.numeric(
+        unlist(lapply(growth, function(f) f$NLSCoefficients[['r']])))
+growth_meta$Warburg <- as.numeric(
+        unlist(lapply(growth, function(f) f$NLSCoefficients[['A']])))
+growth_meta$Exponent <- as.numeric(
+        unlist(lapply(growth, function(f) f$NLSCoefficients[['eta']])))
+
+growth_data <- merge(growth_meta, spec_data, by='Well')
+@
+
+\section{Electrode geometry}
+
+\begin{figure}[H]
+\begin{center}
+\includegraphics[width=0.3 \linewidth]{electrode}
+\caption{Electrodes - made out of two tin-coated male copper pins typically used as jumper cables for breadboard design.}
+\end{center}
+\end{figure}
+
+\section{Results}
+\subsection{Optical density-based quantification}
+<<odplot, fig.cap="Optical density at 600 nm as a function of dilution">>=
+ggplot(subset(growth_data, dilution>0.0002), aes(x=dilution, y=Mean)) + geom_point() + scale_y_log10() + scale_x_log10() + geom_smooth() + theme_bw()
+@
+
+\subsection{Typical impedance curves} 
+<<impedance_curves, fig.cap="Frequency response as a function of dilution">>=
+bigdat <- ldply(growth, function(f) { 
+  tmp <- f$chartdata 
+  tmp$Well <- f$Well
+  tmp})
+
+bigdat <- merge(bigdat, growth_data, by='Well')
+ggplot(subset(bigdat, dilution>0.0002), aes(x=f, y=z, col=as.factor(dilution))) + geom_point(alpha=0.4, size=1) + scale_x_log10() + scale_y_log10() + geom_smooth() + theme_bw() + scale_colour_discrete("Dilution", labels = rev(c("1:1", "1:4", "1:16", "1:64", "1:256", "1:1024", "1:4096")))
+@
+
+\subsection{Linear and nonlinear models}
+We want to simplify the impedance curve to a few parameters, and see if these parameters are predictive of the optical density. 
+We first test a simple model where we fit a straight line to the frequency response in the log-log space. 
+$$
+\mathrm{log}(z) = \mathrm{Slope} \times \mathrm{log}(f) + \mathrm{Intercept}
+$$
+where $z$ is impedance in ohms and $f$ is frequency in Hz. Since this is a linear model, \emph{Slope} and \emph{Intercept} are correlated. We can test if the slope is predictive of the quantity \emph{Mean}, which signifies optical density. Note that we weigh the regression for the higher frequencies to fit the higher frequency spectrum better. The results are not too different without this weighted regression however. 
+
+<<linmod>>=
+summary(lm(Mean ~ Slope, growth_data))
+@
+
+As seen above, a near perfect correlation exists between the slope of the frequency response and the optical density. 
+
+Given the interesting curvilinear profile of the impedance curve, we are interested in seeing if we can fit a slightly more mechanistic model to the curve. We assume that the media between the electrodes can be modeled as a pure resistor in series with a Warburg-like element. Typically a Warburg element is considered an appropriate choice when measuring impedance of a diffusion-limited process, as is the case here. The typical complex Warburg impedance is given by:
+
+$$
+Z_W = \frac{A_W}{\sqrt{\omega}} (1 - i)
+$$
+where $Z_W$ is the complex Warburg impedance, $A_W$ is a scaling factor and $\omega$ is the angular frequency. The exponent of 0.5 of $\omega$ comes from an assumption of planar electrode geometry, which is not the case in our system. In any case, we modify the Warburg term slightly by allowing the exponent to vary freely from 0.5. We used the following formulation:
+
+$$
+Z_W = \frac{A_W}{\omega^\eta} (1 - i)
+$$
+
+where $A_W$ and $\eta$ were solved from $f$ and $z$ data. 
+
+An example of the degree to which such a model fits the data is shown below:
+
+<<nlsmod_fit, fig.cap="Warburg-like impedance model fit to data">>=
+with(growth[[1]]$chartdata, plot(f,z, log='xy', pch=20, col='lightblue'))
+curve(rcmodel(2.083087e+02, 1.197626e+05, 6.205435e-01 , x), from=50, to=20000, col='blue', add=TRUE)
+with(growth[[6]]$chartdata, points(f,z, pch=20, col='coral'))
+curve(rcmodel(3.419843e+02, 7.773541e+04, 6.088895e-01, x), from=50, to=20000, col='red', add=TRUE)
+legend('topright', legend=c("1:1", "1:64"), col=c('lightblue', 'coral'), lwd=2, pch=20, bty='n', title="Dilution")
+@
+
+A reasonably good fit, though the fit may be improved for lower dilutions. Taken together, the three terms adequately capture the observed optical density as can be seen from the regression below. 
+
+<<nlsmod>>=
+summary(lm(Mean ~ Warburg + Resistance + Exponent, growth_data))
+@
+
+
+\end{document}

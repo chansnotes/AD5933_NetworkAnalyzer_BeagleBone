@@ -1,0 +1,11 @@
+*.*~
+
+paper/.Rhistory
+
+paper/Analysis-concordance.tex
+
+paper/Analysis.log
+
+paper/Analysis.pdf
+
+*.gz

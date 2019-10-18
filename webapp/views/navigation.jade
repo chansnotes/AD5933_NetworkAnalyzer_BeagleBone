@@ -1,0 +1,31 @@
+// Navigation
+nav.navbar.navbar-dark.bg-inverse.navbar-fixed-top
+  // Brand and toggle get grouped for better mobile display
+  .navbar-header
+    button.navbar-toggler.hidden-sm-up.pull-sm-right(type='button', data-toggle='collapse', data-target='.navbar-ex1-collapse')
+      | ☰
+    a.navbar-brand(href='#') OpenBioInstrumentation
+
+  // Sidebar Menu Items - These collapse to the responsive navigation menu on small screens
+  .collapse.navbar-collapse.navbar-toggleable-sm.navbar-ex1-collapse
+    ul.nav.navbar-nav.side-nav.list-group
+      li.list-group-item
+        a(href='#gaindiv')
+          i.fa.fa-fw.fa-bar-chart-o
+          |  Charts
+      li.list-group-item
+        a(href='#preferences')
+          i.fa.fa-fw.fa-edit
+          |  Preferences
+      li.list-group-item
+        a(href='#control')
+          i.fa.fa-fw.fa-wrench
+          |  Control
+        a(href='#help')
+          i.fa.fa-fw.fa-question-circle
+          |  Help
+      li.list-group-item
+        a(href='#contact')
+          i.fa.fa-fw.fa-envelope
+          |  Contact
+  // /.navbar-collapse

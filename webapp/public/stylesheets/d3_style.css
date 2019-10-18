@@ -1,0 +1,70 @@
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.x.axis path {
+  display: none;
+}
+.grid .tick {
+    stroke: lightgrey;
+    opacity: 0.7;
+}
+.grid path {
+      stroke-width: 0;
+}
+.line {
+  fill: none;
+  stroke-width: 2px;
+}
+
+.tooltip .circle{
+  fill: none;
+}
+.circle {
+	stroke: steelblue;
+	stroke-width: 2;
+	fill: #FFF;
+}
+div.tooltip {
+    position: absolute;
+    text-align: center;
+    width: 160px;
+    height: 46px;
+    padding: 2px;
+    font: 12px;
+    background: rgba(255,255,255, 0.9);
+    border-style: solid;
+    border-width: 2px;
+    border-color: rgba(188,188,188,1);
+
+
+    pointer-events: none;
+    transition: opacity 350ms linear;
+   -moz-transition: opacity 350ms linear;
+   -webkit-transition: opacity 350ms linear;
+
+   transition-delay: 350ms
+   -moz-transition-delay: 350ms;
+   -webkit-transition-delay: 350ms;
+
+   -moz-box-shadow: 4px 4px 12px rgba(0,0,0,.5);
+   -webkit-box-shadow: 4px 4px 12px rgba(0,0,0,.5);
+   box-shadow: 4px 4px 12px rgba(0,0,0,.5);
+
+   -moz-border-radius: 5px;
+   border-radius: 5px;
+}
+
+.navigator .data {
+    fill: lightgrey;
+    stroke-width: 0px;
+}
+
+.navigator .line {
+    fill: none;
+    stroke: darkgrey;
+    stroke-width: 1px;
+}
